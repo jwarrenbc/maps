@@ -1335,6 +1335,13 @@ export default {
           this.fileSrc = null
         }
       }
+    },
+    isLoggedIn(newValue) {
+      if (newValue) {
+        this.$nextTick(() => {
+          this.setupContribute()
+        })
+      }
     }
   },
 
@@ -1533,46 +1540,23 @@ export default {
     }
   },
   mounted() {
-    if (this.isLoggedIn) {
-      if (
-        (this.languageUserSelected === null || this.languageNonBC === null) &&
-        !this.place
-      ) {
-        this.languageUserSelected =
-          this.user.languages.length !== 0 ? this.user.languages[0] : null
-      }
-
-      if (
-        this.userNonBCLanguage.length !== 0 &&
-        this.place &&
-        this.place.non_bc_languages &&
-        this.place.non_bc_languages.length !== 0
-      ) {
-        const previousLang = this.languageNonBC
-        this.languageNonBC = { id: previousLang, name: previousLang }
-      }
-
+    this.$nextTick(() => {
       this.initQuill()
-      this.addAward()
-      this.addSite()
-      // Check if user has artist profile, if not, declare the values
-      this.setArtistDetail()
-      // Setup event details on form
-      this.setEventDetails()
+    })
 
-      this.$root.$on('resetValues', () => {
-        this.resetData()
-      })
-
-      this.$root.$on('updateFileList', () => {
-        this.$store.dispatch('file/getUploadMedia', this.place.id)
-      })
-    } else {
-      this.$root.$emit(
-        'toggleMessageBox',
-        `You need to be logged in first, before proceeding.\n Press "OK" to proceed to Login/Register. `
-      )
+    if (this.isLoggedIn) {
+      this.setupContribute()
     }
+
+    this.$root.$on('resetValues', () => {
+      this.resetData()
+    })
+
+    this.$root.$on('updateFileList', () => {
+      if (this.place) {
+        this.$store.dispatch('file/getUploadMedia', this.place.id)
+      }
+    })
   },
   methods: {
     isValidEmail,
@@ -1831,10 +1815,16 @@ export default {
         : 'choose a thumbnail image'
     },
     initQuill() {
-      if (document.querySelector('#quill')) {
+      const container =
+        (Array.isArray(this.$refs.quill)
+          ? this.$refs.quill[0]
+          : this.$refs.quill) || document.querySelector('#quill')
+      if (container) {
+        if (this.quillEditor || container.querySelector('.ql-editor')) {
+          return
+        }
         require('quill/dist/quill.snow.css')
         const Quill = require('quill')
-        const container = this.$refs.quill
         const editor = new Quill(container, {
           theme: 'snow'
         })
@@ -1854,6 +1844,37 @@ export default {
 
         this.quillEditor = editor
       }
+    },
+    setupContribute() {
+      if (
+        (this.languageUserSelected === null || this.languageNonBC === null) &&
+        !this.place
+      ) {
+        this.languageUserSelected =
+          this.user && this.user.languages && this.user.languages.length !== 0
+            ? this.user.languages[0]
+            : null
+      }
+
+      if (
+        this.userNonBCLanguage.length !== 0 &&
+        this.place &&
+        this.place.non_bc_languages &&
+        this.place.non_bc_languages.length !== 0
+      ) {
+        const previousLang = this.languageNonBC
+        this.languageNonBC = { id: previousLang, name: previousLang }
+      }
+
+      this.initQuill()
+      if (this.relatedData.awardsList.length === 0) {
+        this.addAward()
+      }
+      if (this.relatedData.websiteList.length === 0) {
+        this.addSite()
+      }
+      this.setArtistDetail()
+      this.setEventDetails()
     },
     resetQuill() {
       this.quillEditor.setText('')
@@ -2069,7 +2090,10 @@ export default {
         return
       }
 
-      if ((this.queryType === 'Public Art' || 'Artist') && !this.fileSrc) {
+      if (
+        (this.queryType === 'Public Art' || this.queryType === 'Artist') &&
+        !this.fileSrc
+      ) {
         this.errors.push('Thumbnail: Please upload a thumbnail.')
         this.isLoading = false
         return
